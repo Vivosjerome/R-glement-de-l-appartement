@@ -456,6 +456,38 @@ h2 {
   background: var(--surface);
 }
 .photo-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Photo recue : on ne montre rien avant l'ouverture, elle ne se voit qu'une fois. */
+.photo-sealed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  border-style: dashed;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.photo-sealed-emoji { font-size: 1.5rem; }
+.photo-sealed-text {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+
+/* Sa propre photo, tant que l'autre ne l'a pas regardee. */
+.photo-tag {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 0.1rem 0.35rem;
+  border-radius: 7px;
+  background: #000a;
+  color: #fff;
+  font-size: 0.58rem;
+  font-weight: 600;
+}
 .photo-cell .avatar {
   position: absolute;
   right: 4px;

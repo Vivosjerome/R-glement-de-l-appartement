@@ -51,6 +51,10 @@ npm run dev        # http://127.0.0.1:8788, base et stockage simulés sur disque
 Les secrets locaux vont dans `.dev.vars` (ignoré par git). Pour déclencher le
 cron à la main sans attendre : `curl "http://127.0.0.1:8788/__scheduled"`.
 
+Le local utilise `preview_database_id` et `preview_id` dans `wrangler.toml`.
+Ce n'est pas décoratif : sans eux, `wrangler dev` s'invente des identifiants,
+les réécrit dans le fichier, et la base change sous les pieds.
+
 ### Tests
 
 ```bash
@@ -168,8 +172,21 @@ côté annule.
 
 Le bouton « Prendre ou choisir une photo » ouvre l'appareil photo ou la galerie.
 Un aperçu s'affiche, avec un champ facultatif pour un mot, puis l'autre reçoit une
-notification contenant l'image. Les photos restent consultables dans l'app, et un
-appui sur la notification ouvre directement la bonne.
+notification contenant l'image. Un appui sur la notification ouvre directement
+la bonne photo.
+
+**Une photo ne se voit qu'une fois.** Dans la grille, celle qu'on a reçue n'affiche
+aucune miniature, juste une vignette « Voir une fois » : la montrer là réduirait
+l'intérêt de l'ouvrir. Dès que le destinataire referme la visionneuse, l'image est
+effacée du stockage, pour tous les deux. Quitter l'app sans refermer compte aussi
+comme vu — la requête part avec `keepalive`, qui la laisse aboutir après le départ
+de la page, et qui contrairement à `sendBeacon` accepte notre en-tête
+d'authentification.
+
+L'expéditeur, lui, peut rouvrir son propre envoi autant qu'il veut sans le
+consommer : sinon il effacerait son message en vérifiant ce qu'il a envoyé. Tant
+que sa photo est encore là, marquée « Pas encore vue », c'est qu'elle ne l'a pas
+été — ça tient lieu d'accusé de réception.
 
 Le navigateur **redimensionne l'image avant l'envoi** (1600 px, JPEG qualité 0,75) :
 une photo de téléphone de 4 Mo part à environ 200 Ko. L'envoi se fait en binaire brut,

@@ -240,6 +240,19 @@ app.post(
   },
 );
 
+/**
+ * Les photos ne durent que le temps d'etre vues : des que le destinataire
+ * ferme la visionneuse, l'image part pour tous les deux. Celui qui l'a
+ * envoyee peut la rouvrir sans la consommer, sinon il effacerait son propre
+ * message en verifiant ce qu'il a envoye.
+ */
+app.post("/api/photo/:id/seen", auth, (req, res) => {
+  const photo = db.photos.find((p) => p.id === req.params.id);
+  if (!photo || photo.from === req.user) return res.json({ consumed: false });
+  deletePhoto(photo.id);
+  res.json({ consumed: true });
+});
+
 app.delete("/api/photo/:id", auth, (req, res) => {
   if (!deletePhoto(req.params.id)) return res.status(404).json({ error: "Photo introuvable" });
   res.json({ ok: true });

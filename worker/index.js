@@ -263,6 +263,25 @@ app.post("/api/photo", auth, async (c) => {
   return c.json({ photo: { id, from: me, note, createdAt } });
 });
 
+/**
+ * Les photos ne durent que le temps d'etre vues : des que le destinataire
+ * ferme la visionneuse, l'image part pour tous les deux. Celui qui l'a
+ * envoyee peut la rouvrir autant qu'il veut sans la consommer, sinon il
+ * effacerait son propre message en verifiant ce qu'il a envoye.
+ */
+app.post("/api/photo/:id/seen", auth, async (c) => {
+  const id = c.req.param("id");
+  const row = await c.env.DB.prepare("SELECT from_user FROM photos WHERE id = ?")
+    .bind(id)
+    .first();
+  if (!row) return c.json({ consumed: false });
+  if (row.from_user === c.get("me")) return c.json({ consumed: false });
+
+  await c.env.PHOTOS.delete(id);
+  await c.env.DB.prepare("DELETE FROM photos WHERE id = ?").bind(id).run();
+  return c.json({ consumed: true });
+});
+
 app.delete("/api/photo/:id", auth, async (c) => {
   const id = c.req.param("id");
   const { meta } = await c.env.DB.prepare("DELETE FROM photos WHERE id = ?").bind(id).run();

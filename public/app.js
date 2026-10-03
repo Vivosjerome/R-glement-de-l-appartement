@@ -552,23 +552,59 @@ function renderPhotos() {
   const box = $("#photos");
   box.innerHTML = "";
   for (const photo of state.photos) {
+    const mine = photo.from === state.me;
     const cell = document.createElement("button");
     cell.className = "photo-cell";
-    cell.innerHTML = `<img src="/photos/${photo.id}.jpg" alt="" loading="lazy">`;
+
+    if (mine) {
+      // Sa propre photo reste visible tant que l'autre ne l'a pas regardee,
+      // ce qui sert d'accuse de reception : si elle est encore la, c'est
+      // qu'elle n'a pas ete vue.
+      cell.innerHTML = `<img src="/photos/${photo.id}.jpg" alt="" loading="lazy">
+        <span class="photo-tag">Pas encore vue</span>`;
+    } else {
+      // Pas de miniature : la photo ne se montre qu'une fois, autant ne pas
+      // la devoiler dans la grille.
+      cell.classList.add("photo-sealed");
+      cell.innerHTML = `<span class="photo-sealed-emoji">\u{1F4F7}</span>
+        <span class="photo-sealed-text">Voir une fois</span>`;
+    }
+
     cell.appendChild(avatar(photo.from));
     cell.onclick = () => openViewer(photo);
     box.appendChild(cell);
   }
 }
 
+// Photo recue en cours de visionnage : la refermer l'efface definitivement.
+let viewing = null;
+
 function openViewer(photo) {
   const who = state.users.find((u) => u.id === photo.from)?.name || photo.from;
+  const mine = photo.from === state.me;
   const viewer = $("#viewer");
-  viewer.querySelector("img").src = `/photos/${photo.id}.jpg`;
-  viewer.querySelector(".viewer-meta").textContent =
-    `${photo.note ? `${photo.note} — ` : ""}${who}, ${timeLabel(photo.createdAt)}`;
 
-  $("#viewer-delete").onclick = async () => {
+  viewer.querySelector("img").src = `/photos/${photo.id}.jpg`;
+
+  // Le mot est du texte libre : on le pose en noeud texte plutot que dans
+  // du HTML assemble a la main.
+  const meta = viewer.querySelector(".viewer-meta");
+  meta.textContent = "";
+  if (photo.note) {
+    const note = document.createElement("strong");
+    note.textContent = photo.note;
+    meta.append(note, document.createElement("br"));
+  }
+  const sort = document.createElement("em");
+  sort.textContent = mine
+    ? "Elle disparaitra quand l'autre l'aura vue."
+    : "Elle disparait des que tu refermes.";
+  meta.append(`${who}, ${timeLabel(photo.createdAt)}`, document.createElement("br"), sort);
+
+  const bouton = $("#viewer-delete");
+  bouton.textContent = mine ? "Supprimer cette photo" : "J'ai vu";
+  bouton.onclick = async () => {
+    if (!mine) return closeViewer();
     const ok = await confirmSheet({
       emoji: "\u{1F5D1}",
       title: "Supprimer cette photo ?",
@@ -576,17 +612,42 @@ function openViewer(photo) {
       ok: "Oui, supprimer",
     });
     if (!ok) return;
+    viewing = null;
     viewer.classList.add("hidden");
     act(() => api(`/photo/${photo.id}`, { method: "DELETE" }), "Photo supprimee");
   };
 
+  viewing = mine ? null : photo.id;
   viewer.classList.remove("hidden");
+}
+
+function closeViewer() {
+  $("#viewer").classList.add("hidden");
+  const id = viewing;
+  viewing = null;
+  if (!id) return;
+  api(`/photo/${id}/seen`, { method: "POST" })
+    .then(() => refresh())
+    .catch(() => {});
 }
 
 // Seul un appui sur le fond ferme la visionneuse, pas sur ses boutons.
 $("#viewer").onclick = (e) => {
-  if (e.target === $("#viewer")) $("#viewer").classList.add("hidden");
+  if (e.target === $("#viewer")) closeViewer();
 };
+
+// Filet de securite : quitter l'app sans refermer compte quand meme comme vu.
+// keepalive laisse la requete aboutir une fois la page partie, et contrairement
+// a sendBeacon il accepte notre en-tete d'authentification.
+addEventListener("pagehide", () => {
+  if (!viewing) return;
+  fetch(`/api/photo/${viewing}/seen`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    keepalive: true,
+  }).catch(() => {});
+  viewing = null;
+});
 
 function renderRules() {
   $("#reglement").innerHTML = state.reglement.map((r) => `<li>${r}</li>`).join("");

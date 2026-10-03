@@ -171,15 +171,20 @@ const jpeg = Uint8Array.from(
   ),
   (c) => c.charCodeAt(0),
 );
-const envoi = await appel("/api/photo?note=Des%20vetements%20trainent", {
-  token: jerome,
-  method: "POST",
-  body: jpeg,
-  raw: true,
-});
-verifie("Photo envoyee", envoi.status === 200, envoi.data.photo?.id?.slice(0, 8));
+const envoyer = async (note) => {
+  const r = await appel(`/api/photo?note=${encodeURIComponent(note)}`, {
+    token: jerome,
+    method: "POST",
+    body: jpeg,
+    raw: true,
+  });
+  return r.data.photo?.id;
+};
 
-const image = await fetch(`${BASE}/photos/${envoi.data.photo.id}.jpg`);
+const idPhoto = await envoyer("Des vetements trainent");
+verifie("Photo envoyee", Boolean(idPhoto), idPhoto?.slice(0, 8));
+
+const image = await fetch(`${BASE}/photos/${idPhoto}.jpg`);
 const octets = (await image.arrayBuffer()).byteLength;
 verifie("Photo relisible sans session", image.status === 200 && octets === jpeg.length, `${octets} octets`);
 verifie(
@@ -194,9 +199,37 @@ verifie("Identifiant invalide rejete", bidon.status === 404, `HTTP ${bidon.statu
 const avecPhoto = await appel("/api/state", { token: laurine });
 verifie("Photo visible des deux cotes", avecPhoto.data.photos.length >= 1);
 
-const suppr = await appel(`/api/photo/${envoi.data.photo.id}`, { token: laurine, method: "DELETE" });
-verifie("Photo supprimable", suppr.status === 200);
-const apresSuppr = await fetch(`${BASE}/photos/${envoi.data.photo.id}.jpg`);
+console.log("\n--- Une photo ne se voit qu'une fois ---");
+// L'expediteur doit pouvoir relire son propre envoi sans le detruire.
+const parLExpediteur = await appel(`/api/photo/${idPhoto}/seen`, { token: jerome, method: "POST" });
+verifie("L'expediteur ne consomme pas sa photo", parLExpediteur.data.consumed === false);
+verifie(
+  "Elle est toujours la",
+  (await appel("/api/state", { token: jerome })).data.photos.some((p) => p.id === idPhoto),
+);
+
+const vue = await appel(`/api/photo/${idPhoto}/seen`, { token: laurine, method: "POST" });
+verifie("Le destinataire la consomme", vue.data.consumed === true);
+
+const effacee = await fetch(`${BASE}/photos/${idPhoto}.jpg`);
+verifie("Image retiree du stockage", effacee.status === 404, `HTTP ${effacee.status}`);
+verifie(
+  "Disparue pour le destinataire",
+  !(await appel("/api/state", { token: laurine })).data.photos.some((p) => p.id === idPhoto),
+);
+verifie(
+  "Disparue aussi pour l'expediteur",
+  !(await appel("/api/state", { token: jerome })).data.photos.some((p) => p.id === idPhoto),
+);
+
+const rejoue = await appel(`/api/photo/${idPhoto}/seen`, { token: laurine, method: "POST" });
+verifie("Revoir une photo deja consommee ne casse rien", rejoue.status === 200, `HTTP ${rejoue.status}`);
+
+// Suppression manuelle par l'expediteur, avant toute lecture.
+const aSupprimer = await envoyer("A retirer");
+const suppr = await appel(`/api/photo/${aSupprimer}`, { token: jerome, method: "DELETE" });
+verifie("Photo supprimable a la main", suppr.status === 200);
+const apresSuppr = await fetch(`${BASE}/photos/${aSupprimer}.jpg`);
 verifie("Image effacee du stockage", apresSuppr.status === 404, `HTTP ${apresSuppr.status}`);
 
 // --------------------------------------------------------------------------

@@ -29,6 +29,18 @@ function etape(titre) {
   console.log(`\n\u2500\u2500 ${titre}`);
 }
 
+/** Les commandes `--json` entourent parfois le JSON de lignes de journal. */
+function tableauJson(sortie) {
+  const debut = sortie.indexOf("[");
+  const fin = sortie.lastIndexOf("]");
+  if (debut === -1 || fin < debut) return [];
+  try {
+    return JSON.parse(sortie.slice(debut, fin + 1));
+  } catch {
+    return [];
+  }
+}
+
 // ---------------------------------------------------------------- connexion
 etape("Verification de la connexion a Cloudflare");
 const qui = wrangler(["whoami"], { silencieux: true });
@@ -41,59 +53,48 @@ console.log(`   Connecte${compte ? ` (${compte[1]})` : ""}.`);
 
 let toml = readFileSync(TOML, "utf8");
 
+// On interroge toujours le compte plutot que de se fier a ce que contient
+// wrangler.toml : `wrangler dev` peut y avoir ecrit des identifiants locaux,
+// qui n'existent pas chez Cloudflare et feraient echouer la mise en ligne.
+
 // ---------------------------------------------------------- base de donnees
 etape("Base de donnees D1");
-let idBase = toml.match(/database_id\s*=\s*"([^"]+)"/)?.[1];
-if (idBase?.startsWith("a-remplacer")) {
-  // Peut-etre creee lors d'une tentative precedente.
-  const liste = wrangler(["d1", "list", "--json"], { silencieux: true });
-  const existante = JSON.parse(liste.sortie.slice(liste.sortie.indexOf("[")) || "[]").find(
-    (b) => b.name === BASE_D1,
-  );
-  if (existante) {
-    idBase = existante.uuid;
-    console.log(`   Base "${BASE_D1}" deja presente.`);
-  } else {
-    const creation = wrangler(["d1", "create", BASE_D1]);
-    idBase = creation.sortie.match(/database_id\s*=\s*"([^"]+)"/)?.[1]
-      || creation.sortie.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0];
-    if (!idBase) throw new Error("identifiant de base introuvable dans la reponse de Cloudflare");
-    console.log(`   Base "${BASE_D1}" creee.`);
-  }
-  toml = toml.replace(/database_id\s*=\s*"[^"]+"/, `database_id = "${idBase}"`);
-  writeFileSync(TOML, toml);
+let idBase = tableauJson(wrangler(["d1", "list", "--json"], { silencieux: true }).sortie).find(
+  (b) => b.name === BASE_D1,
+)?.uuid;
+
+if (idBase) {
+  console.log(`   Base "${BASE_D1}" deja presente.`);
 } else {
-  console.log(`   Deja configuree.`);
+  const creation = wrangler(["d1", "create", BASE_D1]);
+  idBase =
+    creation.sortie.match(/database_id\s*=\s*"([^"]+)"/)?.[1] ||
+    creation.sortie.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0];
+  if (!idBase) throw new Error("identifiant de base introuvable dans la reponse de Cloudflare");
+  console.log(`   Base "${BASE_D1}" creee.`);
 }
+toml = toml.replace(/^database_id\s*=\s*"[^"]*"/m, `database_id = "${idBase}"`);
+writeFileSync(TOML, toml);
 
 // -------------------------------------------------------- stockage des photos
 etape("Stockage des photos (KV)");
-let idKv = toml.match(/\[\[kv_namespaces\]\][\s\S]*?id\s*=\s*"([^"]+)"/)?.[1];
-if (idKv?.startsWith("a-remplacer")) {
-  const liste = wrangler(["kv", "namespace", "list"], { silencieux: true });
-  const attendu = new RegExp(`"title"\\s*:\\s*"[^"]*${KV_BINDING}[^"]*"`, "i");
-  const existant = liste.sortie
-    .split(/\},\s*\{/)
-    .find((bloc) => attendu.test(`{${bloc}}`))
-    ?.match(/"id"\s*:\s*"([0-9a-f]{32})"/i)?.[1];
-  if (existant) {
-    idKv = existant;
-    console.log("   Espace deja present.");
-  } else {
-    const creation = wrangler(["kv", "namespace", "create", KV_BINDING]);
-    idKv = creation.sortie.match(/id\s*=\s*"([0-9a-f]{32})"/i)?.[1]
-      || creation.sortie.match(/"id"\s*:\s*"([0-9a-f]{32})"/i)?.[1];
-    if (!idKv) throw new Error("identifiant KV introuvable dans la reponse de Cloudflare");
-    console.log("   Espace cree.");
-  }
-  toml = toml.replace(
-    /(\[\[kv_namespaces\]\][\s\S]*?id\s*=\s*)"[^"]+"/,
-    `$1"${idKv}"`,
-  );
-  writeFileSync(TOML, toml);
+// Cloudflare prefixe le titre du nom du Worker : "regles-appartement-PHOTOS".
+let idKv = tableauJson(wrangler(["kv", "namespace", "list"], { silencieux: true }).sortie).find(
+  (n) => n.title?.endsWith(KV_BINDING) && !/preview/i.test(n.title),
+)?.id;
+
+if (idKv) {
+  console.log("   Espace deja present.");
 } else {
-  console.log("   Deja configure.");
+  const creation = wrangler(["kv", "namespace", "create", KV_BINDING]);
+  idKv =
+    creation.sortie.match(/\bid\s*=\s*"([0-9a-f]{32})"/i)?.[1] ||
+    creation.sortie.match(/"id"\s*:\s*"([0-9a-f]{32})"/i)?.[1];
+  if (!idKv) throw new Error("identifiant KV introuvable dans la reponse de Cloudflare");
+  console.log("   Espace cree.");
 }
+toml = toml.replace(/^id\s*=\s*"[^"]*"/m, `id = "${idKv}"`);
+writeFileSync(TOML, toml);
 
 // ------------------------------------------------------------------ schema
 etape("Creation des tables");
