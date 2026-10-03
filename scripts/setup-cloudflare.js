@@ -11,6 +11,10 @@ const TOML = "wrangler.toml";
 const BASE_D1 = "regles";
 const KV_BINDING = "PHOTOS";
 
+// On appelle le script de wrangler avec node plutot que via npx : pas de
+// shell, donc pas de question d'echappement sur les arguments.
+const WRANGLER = "node_modules/wrangler/bin/wrangler.js";
+
 /**
  * `interactif` rend la main au terminal : indispensable pour `deploy`, qui
  * propose de creer le sous-domaine workers.dev et renonce sans rien demander
@@ -18,12 +22,11 @@ const KV_BINDING = "PHOTOS";
  */
 function wrangler(args, { input, silencieux, interactif } = {}) {
   if (interactif) {
-    const res = spawnSync("npx", ["wrangler", ...args], { shell: true, stdio: "inherit" });
+    const res = spawnSync(process.execPath, [WRANGLER, ...args], { stdio: "inherit" });
     return { code: res.status, sortie: "" };
   }
-  const res = spawnSync("npx", ["wrangler", ...args], {
+  const res = spawnSync(process.execPath, [WRANGLER, ...args], {
     encoding: "utf8",
-    shell: true,
     input,
   });
   const sortie = `${res.stdout || ""}${res.stderr || ""}`;
@@ -181,7 +184,7 @@ console.log(`   Code d'acces : ${code}`);
 // s'installe pas sur l'ecran d'accueil, et c'est tout l'interet d'une PWA.
 if (!existsSync("public/icons/icon-512.png")) {
   etape("Generation des icones");
-  spawnSync("node", ["scripts/make-icons.js"], { shell: true, stdio: "inherit" });
+  spawnSync(process.execPath, ["scripts/make-icons.js"], { stdio: "inherit" });
 }
 
 etape("Mise en ligne");

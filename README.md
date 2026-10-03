@@ -58,13 +58,19 @@ les réécrit dans le fichier, et la base change sous les pieds.
 ### Tests
 
 ```bash
-npm test           # fuseau horaire, chiffrement Web Push, rotation des tâches
+npm test             # fuseau, chiffrement Web Push, déclencheur, rotation
 npm run test:worker  # parcours complets, avec `npm run dev` lancé à côté
+npm run test:live    # vérifie l'app réellement en ligne (lecture seule)
 ```
 
 `npm run test:worker` rejoue les vrais scénarios : connexion par lien, passage
 de main sur la litière, blocage des clics en boucle, enchaînement machine →
-étendre → rentrer, envoi et suppression de photo, déclenchement du cron.
+étendre → rentrer, photo vue une fois puis effacée, déclenchement du cron.
+
+`scripts/test-tick.js` mérite une mention : le déclencheur d'une minute est la
+seule partie qui tourne sans que personne ne regarde, donc une erreur y
+resterait invisible. Il l'exerce à des heures précises — samedi 15 h, 7 h du
+matin, 19 h 30 — pour vérifier ce qui apparaît, ce qui attend, et pour qui.
 
 ## Version locale (optionnelle)
 

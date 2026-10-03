@@ -13,8 +13,9 @@
     "deploy": "node scripts/setup-cloudflare.js",
     "dev": "wrangler dev --test-scheduled",
     "db:local": "wrangler d1 execute regles --local --file=schema.sql",
-    "test": "node scripts/test-time.js && node scripts/test-webpush.js && node scripts/test-rotation.js",
-    "test:worker": "node scripts/test-worker.js"
+    "test": "node scripts/test-time.js && node scripts/test-webpush.js && node scripts/test-tick.js && node scripts/test-rotation.js",
+    "test:worker": "node scripts/test-worker.js",
+    "test:live": "node scripts/test-live.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

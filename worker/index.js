@@ -337,8 +337,15 @@ export default {
     const ctx = await buildContext(env);
     executionCtx.waitUntil(
       (async () => {
-        await tick(ctx, new Date(event.scheduledTime));
-        await ctx.store.flush();
+        try {
+          await tick(ctx, new Date(event.scheduledTime));
+          await ctx.store.flush();
+        } catch (err) {
+          // Personne ne regarde quand le cron tourne : sans cette trace, une
+          // panne resterait invisible et les taches cesseraient d'apparaitre
+          // sans que rien ne le signale. Visible via `npx wrangler tail`.
+          console.error("[cron] echec", err?.stack || err?.message || String(err));
+        }
       })(),
     );
   },
