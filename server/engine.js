@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { USER_IDS, userName, otherUser } from "./config.js";
 import { db, save } from "./store.js";
-import { TASKS_BY_ID, PLANNED, RAPPEL_SOIR } from "./tasks.js";
+import { TASKS_BY_ID, PLANNED, RAPPEL_SOIR } from "../shared/tasks.js";
 import { notify } from "./push.js";
 
 const MINUTE = 60 * 1000;

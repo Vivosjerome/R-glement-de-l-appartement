@@ -4,34 +4,71 @@ PWA de gestion des tâches ménagères pour deux personnes, avec notifications p
 sur iPhone et Android. Pas de compte développeur Apple, pas de store, pas de
 resignature tous les 7 jours.
 
-## Mise en route
+## Mise en ligne (gratuit, rien à laisser allumé)
+
+Deux commandes, et l'app est en ligne avec son HTTPS et ses notifications :
 
 ```bash
 npm install
-npm run setup          # génère les icônes + les clés VAPID
-cp .env.example .env   # puis colle les clés VAPID affichées
-npm start
+npm run login      # ouvre le navigateur pour créer/connecter le compte Cloudflare
+npm run deploy     # crée la base, le stockage, les clés, et met en ligne
 ```
 
-L'app écoute sur `http://localhost:3000`. Le code d'accès par défaut est `1234`
-(à changer dans `.env`), et les prénoms des deux occupants se règlent avec la
-variable `USERS`.
+`npm run deploy` est rejouable : il ne recrée jamais ce qui existe déjà, donc
+c'est aussi la commande de mise à jour. À la fin, il affiche l'adresse
+(`https://regles-appartement.<ton-compte>.workers.dev`) et le code d'accès.
 
-## Il faut du HTTPS
+Tout tient dans le niveau gratuit de Cloudflare : 100 000 requêtes par jour,
+une base D1 de 5 Go, et un déclencheur qui réveille l'app chaque minute pour
+créer les tâches du jour et envoyer les rappels. **Aucune carte bancaire n'est
+demandée** — c'est pour ça que les photos sont stockées dans KV et non dans R2,
+qui exige un moyen de paiement même sur son offre gratuite.
 
-C'est la seule contrainte vraiment incontournable : **les service workers et le
-Web Push n'existent pas en HTTP**, sauf sur `localhost`. Une adresse de type
-`http://192.168.1.x:3000` ne marchera pas, même sur le réseau local.
+### Pourquoi pas GitHub Pages
 
-Le plus simple est un tunnel Cloudflare, gratuit et sans ouvrir de port sur la box :
+GitHub Pages ne sert que des fichiers statiques : il n'exécute aucun code côté
+serveur. Or trois choses en ont besoin, et aucune ne peut se faire dans le
+navigateur :
+
+- **Envoyer une notification à l'autre téléphone.** Il faut signer une requête
+  vers Apple ou Google avec la clé VAPID privée. Publier cette clé dans le code
+  de la page reviendrait à laisser n'importe qui notifier vos téléphones.
+- **Partager l'état entre vous deux.** Le `localStorage` est propre à chaque
+  navigateur : si tu valides la litière, rien n'arriverait jamais à Laurine.
+- **Réveiller l'app quand elle est fermée.** Le rappel de 20 h doit partir même
+  si personne n'a ouvert la page. C'est le rôle du déclencheur programmé.
+
+Le dossier `public/` pourrait effectivement être hébergé sur Pages, mais il ne
+serait alors qu'une coquille sans aucune des fonctions demandées.
+
+## Développement en local
 
 ```bash
-cloudflared tunnel --url http://localhost:3000
+npm run db:local   # crée les tables dans la base locale (une seule fois)
+npm run dev        # http://127.0.0.1:8788, base et stockage simulés sur disque
 ```
 
-Cela renvoie une URL `https://xxx.trycloudflare.com` utilisable immédiatement.
-Pour une installation durable, crée un tunnel nommé avec ton propre domaine, sinon
-l'URL change à chaque redémarrage et il faudra réinstaller la PWA.
+Les secrets locaux vont dans `.dev.vars` (ignoré par git). Pour déclencher le
+cron à la main sans attendre : `curl "http://127.0.0.1:8788/__scheduled"`.
+
+### Tests
+
+```bash
+npm test           # fuseau horaire, chiffrement Web Push, rotation des tâches
+npm run test:worker  # parcours complets, avec `npm run dev` lancé à côté
+```
+
+`npm run test:worker` rejoue les vrais scénarios : connexion par lien, passage
+de main sur la litière, blocage des clics en boucle, enchaînement machine →
+étendre → rentrer, envoi et suppression de photo, déclenchement du cron.
+
+## Version locale (optionnelle)
+
+Un serveur Node équivalent subsiste dans `server/` pour tourner chez soi
+(`npm start`, port 3000). Il demande alors du HTTPS, que `localhost` fournit
+pour la machine hôte mais pas pour les téléphones : il faut un tunnel
+(`cloudflared tunnel --url http://localhost:3000`) et laisser le PC allumé.
+La version Cloudflare existe précisément pour éviter ça.
 
 ## Installation sur les téléphones
 
@@ -47,22 +84,25 @@ Safari classique.
 On n'entre jamais de mot de passe, et l'écran de connexion n'apparaît quasiment
 jamais.
 
-Depuis la machine qui héberge le serveur, `http://localhost:3000` entre directement :
-une requête venant réellement de la loopback n'a rien à prouver. La vérification porte
-sur l'adresse de la socket et sur l'absence d'en-têtes de transfert, pas sur `req.ip`,
-qui provient de `X-Forwarded-For` et serait falsifiable depuis l'extérieur.
-
-Pour les téléphones, le serveur génère au premier démarrage un lien d'invitation et
-l'affiche dans la console :
+Tout repose sur un **lien d'invitation** :
 
 ```
-http://localhost:3000/?k=e4e1b5c0...
+https://regles-appartement.xxx.workers.dev/?k=e4e1b5c0...
 ```
 
-Il suffit d'ouvrir ce lien sur un téléphone : l'app reconnaît l'appareil, se connecte
+Il suffit de l'ouvrir sur un téléphone : l'app reconnaît l'appareil, se connecte
 toute seule et retire aussitôt le secret de la barre d'adresse pour qu'il ne traîne ni
 dans l'historique ni dans un partage d'écran. Le téléphone garde ensuite sa session
 indéfiniment.
+
+La toute première connexion, elle, se fait avec le code affiché par
+`npm run deploy` ; ensuite le lien suffit pour le deuxième téléphone.
+
+(En local, `http://localhost:3000` entre directement : une requête venant réellement
+de la loopback n'a rien à prouver. La vérification porte sur l'adresse de la socket et
+sur l'absence d'en-têtes de transfert, pas sur `req.ip`, qui provient de
+`X-Forwarded-For` et serait falsifiable depuis l'extérieur. Hébergée sur Cloudflare,
+l'app est toujours distante : ce raccourci n'existe plus.)
 
 Une fois connecté, **Réglages → Ajouter un téléphone** permet de renvoyer ce lien par
 SMS ou WhatsApp via la feuille de partage native. C'est comme ça qu'on installe l'app
@@ -92,7 +132,8 @@ coincé devant un choix.
 
 ## Comment les règles sont traduites
 
-Les tâches vivent dans `server/tasks.js`. Toutes les règles n'en produisent pas une :
+Les tâches vivent dans `shared/tasks.js`, partagé par les deux versions.
+Toutes les règles n'en produisent pas une :
 celles qui se font dans la foulée, comme la vaisselle juste après avoir cuisiné ou
 ne pas laisser traîner ses affaires, n'ont rien à suivre. Elles restent affichées
 dans l'onglet Règles, sans polluer la liste du jour.
@@ -134,8 +175,8 @@ Le navigateur **redimensionne l'image avant l'envoi** (1600 px, JPEG qualité 0,
 une photo de téléphone de 4 Mo part à environ 200 Ko. L'envoi se fait en binaire brut,
 sans multipart ni base64.
 
-Les images sont stockées dans `data/photos/`, les 60 dernières sont conservées et les
-plus anciennes supprimées du disque. Elles sont servies sans session, parce qu'une
+Les images sont stockées dans le KV Cloudflare (sur disque en local), les 60 dernières
+sont conservées et les plus anciennes effacées. Elles sont servies sans session, parce qu'une
 notification charge l'image sans nos en-têtes d'authentification : c'est le nom de
 fichier, un UUID, qui fait office de clé.
 
@@ -151,7 +192,13 @@ rouge, pas de « en retard de 3 h ». L'app indique seulement « Aujourd'hui »,
 
 Les rappels passent par le téléphone : une notification quand la tâche apparaît, puis
 **un seul rappel groupé à 20 h** listant ce qui reste, plutôt qu'une notification par
-tâche. L'heure se règle avec `RAPPEL_SOIR` dans `server/tasks.js`.
+tâche. L'heure se règle avec `RAPPEL_SOIR` dans `shared/tasks.js`.
+
+Toutes ces heures sont comprises dans le fuseau de l'appartement, réglé par la
+variable `TIMEZONE` du `wrangler.toml`. C'est nécessaire parce que Cloudflare
+exécute le code en UTC : sans ça, « 19 h » tomberait à 20 h l'été. Les changements
+d'heure sont gérés, y compris pour une échéance à deux jours qui enjambe la nuit
+du passage à l'heure d'hiver.
 
 Une tâche ne peut être validée que par la personne à qui elle incombe, sinon
 l'historique créditerait la mauvaise personne. Celles de l'autre restent affichées
@@ -181,19 +228,24 @@ vers une app dédiée type Pushover plutôt que vers la PWA.
 ## Structure
 
 ```
-server/
-  config.js      lecture du .env, utilisateurs
-  tasks.js       les 11 règles traduites en tâches
-  store.js       persistance JSON atomique (data/db.json)
-  push.js        envoi Web Push, purge des abonnements morts
-  engine.js      création des tâches, complétion, escalade des relances
-  index.js       API REST + cron à la minute
+shared/tasks.js  les 11 règles traduites en tâches (commun aux deux versions)
+worker/          la version Cloudflare, celle qui est en ligne
+  index.js         routes HTTP (Hono) + déclencheur programmé
+  engine.js        création des tâches, complétion, rotation, rappels
+  store.js         accès à la base D1
+  webpush.js       VAPID et chiffrement, écrits avec WebCrypto
+  time.js          raisonnement horaire dans le fuseau de l'appartement
+  push.js          envoi, purge des abonnements morts
+  config.js        lecture des variables d'environnement
+server/          la version Node locale, même logique sur Express
 public/          la PWA (aucune étape de build)
-scripts/         génération des clés VAPID, des icônes, test du moteur
+scripts/         installation Cloudflare, clés VAPID, icônes, tests
+schema.sql       les tables D1
+wrangler.toml    bindings, variables, déclencheur cron
 ```
 
-## Laisser tourner en permanence
-
-Le serveur doit rester allumé pour envoyer les rappels. Sur un Raspberry Pi ou un
-vieux PC sous Linux, un service systemd suffit. Sous Windows, `pm2` avec
-`pm2 startup` fait le travail.
+`worker/webpush.js` réimplémente la bibliothèque `web-push` avec WebCrypto,
+parce que celle-ci dépend du module `crypto` de Node, absent des Workers :
+signature VAPID en ES256, puis chiffrement `aes128gcm` du corps du message.
+`scripts/test-webpush.js` joue le rôle du navigateur et déchiffre le résultat
+pour vérifier que l'implémentation est conforme.

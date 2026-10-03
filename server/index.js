@@ -6,7 +6,7 @@ import cron from "node-cron";
 
 import { config, USER_IDS, userName, otherUser } from "./config.js";
 import { db, save } from "./store.js";
-import { REGLEMENT, DEVISE, TRIGGERS, PLANNED, DECLARABLE, TASKS_BY_ID } from "./tasks.js";
+import { REGLEMENT, DEVISE, TRIGGERS, PLANNED, DECLARABLE, TASKS_BY_ID } from "../shared/tasks.js";
 import { addSubscription, removeSubscription, notify, pushReady } from "./push.js";
 import {
   completeInstance,

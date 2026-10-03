@@ -8,15 +8,25 @@
     "start": "node server/index.js",
     "keys": "node scripts/gen-vapid.js",
     "icons": "node scripts/make-icons.js",
-    "setup": "node scripts/gen-vapid.js && node scripts/make-icons.js"
+    "setup": "node scripts/gen-vapid.js && node scripts/make-icons.js",
+    "login": "wrangler login",
+    "deploy": "node scripts/setup-cloudflare.js",
+    "dev": "wrangler dev --test-scheduled",
+    "db:local": "wrangler d1 execute regles --local --file=schema.sql",
+    "test": "node scripts/test-time.js && node scripts/test-webpush.js && node scripts/test-rotation.js",
+    "test:worker": "node scripts/test-worker.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "hono": "^4.13.12",
     "node-cron": "^3.0.3",
     "web-push": "^3.6.7"
   },
   "engines": {
     "node": ">=18"
+  },
+  "devDependencies": {
+    "wrangler": "^4.147.0"
   }
 }

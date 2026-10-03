@@ -1,0 +1,36 @@
+name = "regles-appartement"
+main = "worker/index.js"
+compatibility_date = "2025-09-01"
+
+# Le dossier public est servi tel quel par Cloudflare ; le Worker ne voit
+# que ce qui n'y correspond pas (les routes /api et /photos).
+[assets]
+directory = "./public"
+not_found_handling = "single-page-application"
+
+# Le moteur se reveille chaque minute pour creer les taches du jour
+# et envoyer le rappel du soir.
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "regles"
+database_id = "a-remplacer-par-la-sortie-de-wrangler-d1-create"
+
+[[kv_namespaces]]
+binding = "PHOTOS"
+id = "a-remplacer-par-la-sortie-de-wrangler-kv-namespace-create"
+
+[vars]
+USERS = "jerome:Jerome:android,laurine:Laurine:ios"
+TIMEZONE = "Europe/Paris"
+MENAGE_DAY = "6"
+MACHINE_MINUTES = "120"
+LINGE_SEC_HOURS = "6"
+
+# Les cles VAPID et le code d'acces sont des secrets, jamais dans ce fichier :
+#   npx wrangler secret put VAPID_PUBLIC_KEY
+#   npx wrangler secret put VAPID_PRIVATE_KEY
+#   npx wrangler secret put VAPID_SUBJECT
+#   npx wrangler secret put APP_PIN

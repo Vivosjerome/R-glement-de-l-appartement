@@ -2,6 +2,10 @@ node_modules/
 .env
 data/
 
+# Secrets et etat local de Cloudflare Workers
+.dev.vars
+.wrangler/
+
 # Icones generees par `npm run icons`
 public/icons/
 

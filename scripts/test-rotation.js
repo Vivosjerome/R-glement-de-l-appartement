@@ -2,7 +2,7 @@
 // Jerome fait la litiere -> elle revient a Laurine 2 jours plus tard, etc.
 import { db, saveNow } from "../server/store.js";
 import { tick, completeInstance, nextOccurrence } from "../server/engine.js";
-import { TASKS_BY_ID } from "../server/tasks.js";
+import { TASKS_BY_ID } from "../shared/tasks.js";
 
 Object.assign(db, {
   instances: [],
