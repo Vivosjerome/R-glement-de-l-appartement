@@ -11,7 +11,16 @@ const TOML = "wrangler.toml";
 const BASE_D1 = "regles";
 const KV_BINDING = "PHOTOS";
 
-function wrangler(args, { input, silencieux } = {}) {
+/**
+ * `interactif` rend la main au terminal : indispensable pour `deploy`, qui
+ * propose de creer le sous-domaine workers.dev et renonce sans rien demander
+ * si sa sortie est capturee.
+ */
+function wrangler(args, { input, silencieux, interactif } = {}) {
+  if (interactif) {
+    const res = spawnSync("npx", ["wrangler", ...args], { shell: true, stdio: "inherit" });
+    return { code: res.status, sortie: "" };
+  }
   const res = spawnSync("npx", ["wrangler", ...args], {
     encoding: "utf8",
     shell: true,
@@ -48,7 +57,7 @@ if (qui.code !== 0 || /not authenticated|You are not logged in/i.test(qui.sortie
   console.error("\nTu n'es pas connecte. Lance d'abord :\n\n    npx wrangler login\n");
   process.exit(1);
 }
-const compte = qui.sortie.match(/associated with the email ([^\s.]+@[^\s.]+\.\S+)/i);
+const compte = qui.sortie.match(/associated with the email (\S+@[\w.-]+\.\w+)/i);
 console.log(`   Connecte${compte ? ` (${compte[1]})` : ""}.`);
 
 let toml = readFileSync(TOML, "utf8");
@@ -102,52 +111,110 @@ wrangler(["d1", "execute", BASE_D1, "--remote", "--file=schema.sql", "--yes"]);
 console.log("   Tables en place.");
 
 // ------------------------------------------------------------------ secrets
+// Cloudflare ne laisse jamais relire un secret. C'est donc .dev.vars, le
+// fichier de secrets locaux deja ignore par git, qui fait foi : sans cette
+// reference une relance regenererait des cles, et il faudrait reactiver les
+// notifications sur les deux telephones.
+const DEV_VARS = ".dev.vars";
+
+function lire(fichier, cle) {
+  if (!existsSync(fichier)) return null;
+  return readFileSync(fichier, "utf8").match(new RegExp(`^${cle}=(.+)$`, "m"))?.[1]?.trim() || null;
+}
+
+function memorise(cle, valeur) {
+  const avant = existsSync(DEV_VARS) ? readFileSync(DEV_VARS, "utf8") : "";
+  const ligne = `${cle}=${valeur}`;
+  const motif = new RegExp(`^${cle}=.*$`, "m");
+  writeFileSync(
+    DEV_VARS,
+    motif.test(avant)
+      ? avant.replace(motif, ligne)
+      : `${avant}${!avant || avant.endsWith("\n") ? "" : "\n"}${ligne}\n`,
+  );
+}
+
+/**
+ * Valeur connue localement, sinon celle qu'on vient de fabriquer. On ne
+ * regarde pas .env ici : c'est la configuration du serveur Node local, et son
+ * code d'acces par defaut n'a rien a faire en production.
+ */
+function secret(cle, valeur) {
+  const retenue = process.env[cle] || lire(DEV_VARS, cle) || valeur;
+  wrangler(["secret", "put", cle], { input: `${retenue}\n` });
+  memorise(cle, retenue);
+  return retenue;
+}
+
+/**
+ * Les cles VAPID, elles, sont partagees avec le serveur local : les memes des
+ * deux cotes, les telephones restent abonnes sans rien reactiver. Les deux
+ * moities doivent venir du meme fichier, car associer une cle publique a une
+ * privee depareillee rendrait tout envoi invalide sans message comprehensible.
+ */
+function clesVapid() {
+  for (const fichier of [".env", DEV_VARS]) {
+    const publicKey = lire(fichier, "VAPID_PUBLIC_KEY");
+    const privateKey = lire(fichier, "VAPID_PRIVATE_KEY");
+    if (publicKey && privateKey) return { paire: { publicKey, privateKey }, source: fichier };
+  }
+  return { paire: webpush.generateVAPIDKeys(), source: null };
+}
+
 etape("Cles de notification et code d'acces");
-const dejaPosees = wrangler(["secret", "list"], { silencieux: true }).sortie;
-const manque = (nom) => !new RegExp(`"name"\\s*:\\s*"${nom}"`).test(dejaPosees);
-
-if (manque("VAPID_PUBLIC_KEY") || manque("VAPID_PRIVATE_KEY")) {
-  // Des cles neuves obligeraient a reactiver les notifications sur les deux
-  // telephones : on reutilise celles du .env si elles existent.
-  let cles = null;
-  if (existsSync(".env")) {
-    const env = readFileSync(".env", "utf8");
-    const pub = env.match(/^VAPID_PUBLIC_KEY=(.+)$/m)?.[1]?.trim();
-    const priv = env.match(/^VAPID_PRIVATE_KEY=(.+)$/m)?.[1]?.trim();
-    if (pub && priv) {
-      cles = { publicKey: pub, privateKey: priv };
-      console.log("   Cles reprises du fichier .env.");
-    }
-  }
-  if (!cles) {
-    cles = webpush.generateVAPIDKeys();
-    console.log("   Nouvelles cles generees.");
-  }
-  wrangler(["secret", "put", "VAPID_PUBLIC_KEY"], { input: `${cles.publicKey}\n` });
-  wrangler(["secret", "put", "VAPID_PRIVATE_KEY"], { input: `${cles.privateKey}\n` });
-  wrangler(["secret", "put", "VAPID_SUBJECT"], { input: "mailto:regles@appartement.local\n" });
-} else {
-  console.log("   Cles deja en place.");
+const { paire, source } = clesVapid();
+for (const [cle, valeur] of Object.entries({
+  VAPID_PUBLIC_KEY: paire.publicKey,
+  VAPID_PRIVATE_KEY: paire.privateKey,
+})) {
+  wrangler(["secret", "put", cle], { input: `${valeur}\n` });
+  memorise(cle, valeur);
 }
+secret("VAPID_SUBJECT", "mailto:regles@appartement.local");
+console.log(`   Cles ${source ? `reprises de ${source}` : "generees"}.`);
 
-let code = process.env.APP_PIN;
-if (manque("APP_PIN")) {
-  if (!code) code = String(Math.floor(1000 + Math.random() * 9000));
-  wrangler(["secret", "put", "APP_PIN"], { input: `${code}\n` });
-  console.log(`   Code d'acces : ${code}`);
-} else {
-  console.log("   Code d'acces deja defini.");
-}
+const code = secret("APP_PIN", String(Math.floor(1000 + Math.random() * 9000)));
+console.log(`   Code d'acces : ${code}`);
 
 // -------------------------------------------------------------- mise en ligne
+// Les icones sont generees, donc absentes du depot : sans elles l'app ne
+// s'installe pas sur l'ecran d'accueil, et c'est tout l'interet d'une PWA.
+if (!existsSync("public/icons/icon-512.png")) {
+  etape("Generation des icones");
+  spawnSync("node", ["scripts/make-icons.js"], { shell: true, stdio: "inherit" });
+}
+
 etape("Mise en ligne");
-const deploiement = wrangler(["deploy"]);
-const url = deploiement.sortie.match(/https:\/\/[^\s]+\.workers\.dev/)?.[0];
+console.log(`   Si Cloudflare propose d'enregistrer un sous-domaine workers.dev,
+   reponds oui : c'est l'adresse publique de l'app. N'importe quel nom
+   libre convient, il n'apparait que dans l'URL.
+`);
+
+// En mode interactif : sans terminal, wrangler refuse la question du
+// sous-domaine et echoue au lieu de le creer.
+const deploiement = wrangler(["deploy"], { interactif: true });
+
+if (deploiement.code !== 0) {
+  console.error(`
+${"\u2500".repeat(60)}
+  La mise en ligne a echoue, mais tout le reste est en place : la base,
+  le stockage, les cles et les fichiers sont deja chez Cloudflare.
+
+  Si le message parle de "workers.dev subdomain", c'est qu'il manque
+  l'adresse publique du compte. Ouvre le lien affiche ci-dessus, choisis
+  un nom, puis relance :
+
+      npm run deploy
+
+  Le script reprendra sans rien recreer.
+${"\u2500".repeat(60)}
+`);
+  process.exit(1);
+}
 
 console.log("\n" + "\u2500".repeat(60));
-console.log("  C'est en ligne.");
-if (url) console.log(`\n  Adresse : ${url}`);
-if (code) console.log(`  Code    : ${code}`);
+console.log("  C'est en ligne. L'adresse est celle affichee juste au-dessus.");
+if (code) console.log(`\n  Code d'acces : ${code}`);
 console.log(`
   Sur ton Android : ouvre l'adresse dans Chrome, menu > Ajouter a
   l'ecran d'accueil, puis active les notifications dans l'app.

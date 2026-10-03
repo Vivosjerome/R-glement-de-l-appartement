@@ -13,18 +13,19 @@ not_found_handling = "single-page-application"
 [triggers]
 crons = ["* * * * *"]
 
-# Les identifiants reels sont remplis par `npm run deploy`. Les variantes
+# Ces identifiants ne sont pas des secrets : ils ne servent a rien sans les
+# droits sur le compte. `npm run deploy` les reecrit si besoin. Les variantes
 # "preview" servent au developpement local : sans elles, `wrangler dev`
 # s'invente des identifiants et les reecrit ici.
 [[d1_databases]]
 binding = "DB"
 database_name = "regles"
-database_id = "a-remplacer-par-npm-run-deploy"
+database_id = "d07eabc4-677d-4bf3-badb-9b428eb23369"
 preview_database_id = "regles-local"
 
 [[kv_namespaces]]
 binding = "PHOTOS"
-id = "a-remplacer-par-npm-run-deploy"
+id = "0430725f6f3e400ebd00175fe615b699"
 preview_id = "photos-local"
 
 [vars]
