@@ -1,0 +1,22 @@
+{
+  "name": "regles-appartement",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "PWA de gestion des taches menageres avec notifications push",
+  "scripts": {
+    "start": "node server/index.js",
+    "keys": "node scripts/gen-vapid.js",
+    "icons": "node scripts/make-icons.js",
+    "setup": "node scripts/gen-vapid.js && node scripts/make-icons.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-cron": "^3.0.3",
+    "web-push": "^3.6.7"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

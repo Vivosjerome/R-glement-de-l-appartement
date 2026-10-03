@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Le Reglement</title>
+
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="/styles.css">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+
+<meta name="theme-color" content="#11131a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Reglement">
+</head>
+<body>
+
+<!-- ------------------------------------------------------------- connexion -->
+<section id="login" class="screen">
+  <div class="login-card">
+    <h1 class="script">Le Reglement</h1>
+    <p class="devise">Aucune excuse ne sera valable.</p>
+
+    <!-- Rempli par app.js : reconnaissance automatique de l'appareil. -->
+    <div id="recognized" class="recognized hidden">
+      <div class="recognized-icon" id="recognized-icon"></div>
+      <p class="recognized-text">C'est bien toi, <strong id="recognized-name"></strong> ?</p>
+      <p class="recognized-hint" id="recognized-hint"></p>
+    </div>
+
+    <div id="manual-choice" class="hidden">
+      <label class="field-label">Qui es-tu ?</label>
+      <div id="user-choice" class="user-choice"></div>
+    </div>
+
+    <div id="pin-block" class="hidden">
+      <label class="field-label" for="pin">Code d'acces</label>
+      <input id="pin" type="tel" inputmode="numeric" autocomplete="off" placeholder="••••">
+    </div>
+
+    <button id="login-btn" class="btn primary">Entrer</button>
+    <button id="not-me" class="btn link hidden">Ce n'est pas moi</button>
+    <button id="use-pin" class="btn link hidden">Entrer un code a la place</button>
+    <p id="login-error" class="error"></p>
+    <p id="login-help" class="recognized-hint hidden"></p>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------------ app -->
+<section id="app" class="screen hidden">
+  <header class="topbar">
+    <div>
+      <h1 class="script small">Le Reglement</h1>
+      <p id="greeting" class="greeting"></p>
+    </div>
+    <button id="refresh" class="icon-btn" aria-label="Rafraichir">&#8635;</button>
+  </header>
+
+  <div id="banner" class="banner hidden"></div>
+
+  <main>
+    <!-- ------------------------------------------------------- aujourd'hui -->
+    <div id="tab-today" class="tab">
+      <section>
+        <h2>A faire aujourd'hui</h2>
+        <div id="open-tasks" class="list"></div>
+      </section>
+
+      <section>
+        <h2>Je viens de le faire</h2>
+        <p class="section-note">Le compte a rebours repart et la main passe a l'autre.</p>
+        <div id="declarable" class="triggers"></div>
+      </section>
+
+      <section>
+        <h2>Signaler</h2>
+        <div id="triggers" class="triggers"></div>
+      </section>
+
+      <section>
+        <h2>Photos</h2>
+        <p class="section-note">Montrer plutot qu'expliquer. L'autre recoit la photo.</p>
+        <input id="photo-input" type="file" accept="image/*" hidden>
+        <button id="photo-btn" class="btn">Prendre ou choisir une photo</button>
+        <div id="photos" class="photo-grid"></div>
+      </section>
+
+      <section>
+        <h2>Ensuite</h2>
+        <p class="section-note">Ces taches arriveront toutes seules le moment venu.</p>
+        <div id="upcoming" class="next-list"></div>
+      </section>
+    </div>
+
+    <!-- -------------------------------------------------------- reglement -->
+    <div id="tab-rules" class="tab hidden">
+      <section>
+        <h2>Le reglement</h2>
+        <ol id="reglement" class="reglement"></ol>
+        <p class="devise bottom">Aucune excuse ne sera valable.</p>
+      </section>
+    </div>
+
+    <!-- ------------------------------------------------------------ stats -->
+    <div id="tab-stats" class="tab hidden">
+      <section>
+        <h2>Score</h2>
+        <div id="scoreboard" class="scoreboard"></div>
+      </section>
+      <section>
+        <h2>Historique</h2>
+        <div id="history" class="list"></div>
+      </section>
+    </div>
+
+    <!-- ---------------------------------------------------------- reglages -->
+    <div id="tab-settings" class="tab hidden">
+      <section>
+        <h2>Cet appareil</h2>
+        <div id="device-box" class="notif-box"></div>
+      </section>
+      <section>
+        <h2>Ajouter un telephone</h2>
+        <div id="invite-box" class="notif-box"></div>
+      </section>
+      <section>
+        <h2>Notifications</h2>
+        <div id="notif-box" class="notif-box"></div>
+      </section>
+      <section>
+        <h2>Reglages</h2>
+        <label class="field-label" for="menage-day">Jour du menage complet</label>
+        <select id="menage-day">
+          <option value="1">Lundi</option>
+          <option value="2">Mardi</option>
+          <option value="3">Mercredi</option>
+          <option value="4">Jeudi</option>
+          <option value="5">Vendredi</option>
+          <option value="6">Samedi</option>
+          <option value="0">Dimanche</option>
+        </select>
+
+        <label class="field-label" for="machine-minutes">Duree d'un cycle de machine (min)</label>
+        <input id="machine-minutes" type="number" min="10" step="10">
+
+        <label class="field-label" for="linge-sec">Temps de sechage du linge (h)</label>
+        <input id="linge-sec" type="number" min="1" step="1">
+
+        <button id="save-settings" class="btn">Enregistrer</button>
+        <button id="logout" class="btn ghost">Se deconnecter</button>
+      </section>
+    </div>
+  </main>
+
+  <nav class="tabbar">
+    <button data-tab="today" class="active"><span>&#9745;</span>A faire</button>
+    <button data-tab="rules"><span>&#167;</span>Regles</button>
+    <button data-tab="stats"><span>&#9733;</span>Score</button>
+    <button data-tab="settings"><span>&#9881;</span>Reglages</button>
+  </nav>
+</section>
+
+<div id="toast" class="toast"></div>
+
+<!-- Garde-fou contre les appuis involontaires sur les declarations. -->
+<div id="confirm" class="sheet hidden">
+  <div class="sheet-card">
+    <div class="sheet-emoji"></div>
+    <h3 class="sheet-title"></h3>
+    <p class="sheet-text"></p>
+    <button class="btn primary sheet-ok">Oui, c'est fait</button>
+    <button class="btn ghost sheet-cancel">Annuler</button>
+  </div>
+</div>
+
+<div id="photo-sheet" class="sheet hidden">
+  <div class="sheet-card">
+    <img id="photo-preview" class="photo-preview" alt="Apercu">
+    <input id="photo-note" type="text" maxlength="140" placeholder="Un mot ? (facultatif)">
+    <button id="photo-send" class="btn primary">Envoyer</button>
+    <button id="photo-cancel" class="btn ghost">Annuler</button>
+  </div>
+</div>
+
+<div id="viewer" class="viewer hidden">
+  <img alt="">
+  <p class="viewer-meta"></p>
+  <button id="viewer-delete" class="btn ghost">Supprimer cette photo</button>
+</div>
+
+<script src="/app.js" type="module"></script>
+</body>
+</html>
